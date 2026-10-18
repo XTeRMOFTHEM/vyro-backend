@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>VYRO — Playground</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Tahoma, sans-serif; background: #0f111a; color: #e2e8f0; margin: 0; padding: 16px; }
+  h1 { color: #a855f7; font-size: 22px; } h1 small { color: #64748b; font-size: 12px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+  .tab { padding: 8px 14px; background: #1e2233; border-radius: 8px; cursor: pointer; border: 1px solid #2d3350; font-size: 13px; }
+  .tab.active { background: #7c3aed; border-color: #7c3aed; }
+  .panel { display: none; background: #151929; border: 1px solid #2d3350; border-radius: 12px; padding: 14px; }
+  .panel.active { display: block; }
+  input, textarea, button { font-family: inherit; font-size: 13px; border-radius: 8px; border: 1px solid #2d3350; background: #0f1322; color: #e2e8f0; padding: 8px; margin: 3px 0; }
+  button { background: #7c3aed; border: none; cursor: pointer; padding: 8px 14px; margin: 2px; }
+  button:hover { background: #8b5cf6; }
+  button.gray { background: #334155; }
+  pre { background: #0b0e1a; padding: 10px; border-radius: 8px; overflow: auto; max-height: 320px; direction: ltr; text-align: left; font-size: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  input, textarea { flex: 1; min-width: 160px; }
+  label { font-size: 12px; color: #94a3b8; }
+  #wslog { height: 180px; }
+  .ok { color: #4ade80; } .err { color: #f87171; }
+</style>
+</head>
+<body>
+<h1>VYRO Playground <small>— ابزار تست دستی API (توکن‌ها در localStorage نگه داشته می‌شوند)</small></h1>
+
+<div class="tabs">
+  <div class="tab active" data-t="auth">🔐 احراز هویت</div>
+  <div class="tab" data-t="profile">👤 پروفایل</div>
+  <div class="tab" data-t="posts">📝 پست‌ها</div>
+  <div class="tab" data-t="chat">💬 چت + WS</div>
+  <div class="tab" data-t="wallet">💎 ZYRA</div>
+  <div class="tab" data-t="frames">🖼 فریم‌ها</div>
+  <div class="tab" data-t="notif">🔔 نوتیفیکیشن</div>
+</div>
+
+<div id="out"><pre id="log">// خروجی اینجا نمایش داده می‌شود</pre></div>
+
+<div class="panel active" data-p="auth">
+  <div class="row"><input id="email" placeholder="email" value="player1@vyro.dev"><input id="pass" placeholder="password" value="Player@123"></div>
+  <div class="row"><button onclick="login()">ورود</button>
+  <button class="gray" onclick="reg()">ثبت‌نام جدید (تصادفی)</button>
+  <button class="gray" onclick="api('POST','/auth/me-reminder',null,true)">—</button></div>
+  <div class="row"><input id="verifyToken" placeholder="توکن تایید ایمیل (از پاسخ ثبت‌نام)"><button class="gray" onclick="api('POST','/auth/verify-email',{token:v('verifyToken')})">تایید ایمیل</button></div>
+  <div class="row"><button class="gray" onclick="api('GET','/users/me',null,true)">دریافت پروفایل من</button>
+  <button class="gray" onclick="refresh()">Refresh Token</button>
+  <button class="gray" onclick="api('POST','/auth/logout-all',null,true)">خروج از همه دستگاه‌ها</button></div>
+</div>
+
+<div class="panel" data-p="profile">
+  <div class="row"><input id="uname" placeholder="username جدید"><button onclick="api('PUT','/users/me/username',{username:v('uname')},true)">تغییر username</button></div>
+  <div class="row"><input id="dn" placeholder="نام نمایشی"><input id="bio" placeholder="بیو"><button onclick="api('PATCH','/users/me',{display_name:v('dn'),bio:v('bio')},true)">ذخیره</button></div>
+  <div class="row"><input type="file" id="avatar"><button onclick="upload('/users/me/avatar','avatar')">آپلود آواتار</button>
+  <input type="file" id="banner"><button onclick="upload('/users/me/banner','banner')">آپلود بنر</button></div>
+  <div class="row"><input id="puser" placeholder="username کاربر"><button onclick="api('GET','/users/'+v('puser'),null,true)">مشاهده پروفایل</button>
+  <button onclick="api('POST','/users/'+v('puser')+'/follow',null,true)">فالو</button>
+  <button class="gray" onclick="api('DELETE','/users/'+v('puser')+'/follow',null,true)">آنفالو</button>
+  <button class="gray" onclick="api('GET','/users/'+v('puser')+'/posts',null,true)">پست‌های او</button></div>
+  <div class="row"><input id="donAmt" placeholder="مقدار دونیت" value="10"><button onclick="api('POST','/users/'+v('puser')+'/donate',{amount:+v('donAmt'),message:'دونیت از پلی‌گراوند'},true)">دونیت ZYRA</button></div>
+</div>
+
+<div class="panel" data-p="posts">
+  <div class="row"><textarea id="pcontent" placeholder="متن پست با #هشتگ">سلام VYRO! #گیمینگ #تست</textarea></div>
+  <div class="row"><input type="file" id="pimg" accept="image/*"><button onclick="createPost()">پست جدید (با عکس اختیاری)</button>
+  <button class="gray" onclick="api('GET','/feed/home',null,true)">فید هوم</button>
+  <button class="gray" onclick="api('GET','/feed/explore?mode=trending',null,true)">اکسپلور ترند</button>
+  <button class="gray" onclick="api('GET','/hashtags/trending',null,true)">هشتگ‌های ترند</button></div>
+  <div class="row"><input id="pid" placeholder="post_id"><button onclick="api('POST','/posts/'+v('pid')+'/like',null,true)">لایک</button>
+  <button class="gray" onclick="api('DELETE','/posts/'+v('pid')+'/like',null,true)">لایک حذف</button>
+  <button onclick="api('POST','/posts/'+v('pid')+'/save',null,true)">سیو</button>
+  <button onclick="api('POST','/posts/'+v('pid')+'/repost',{},true)">ریپست</button>
+  <button onclick="api('GET','/posts/'+v('pid'),null,true)">مشاهده</button></div>
+  <div class="row"><input id="buffAmt" placeholder="مقدار buff" value="25"><button onclick="api('POST','/posts/'+v('pid')+'/buff',{amount:+v('buffAmt'),message:'buff!'},true)">💎 Buff پست</button></div>
+  <div class="row"><textarea id="ccom" placeholder="متن کامنت"></textarea><button onclick="api('POST','/posts/'+v('pid')+'/comments',{content:v('ccom')},true)">کامنت</button>
+  <button class="gray" onclick="api('GET','/posts/'+v('pid')+'/comments',null,true)">کامنت‌ها</button></div>
+  <div class="row"><input id="cid" placeholder="comment_id"><button onclick="api('POST','/comments/'+v('cid')+'/like',null,true)">لایک کامنت</button>
+  <button class="gray" onclick="api('GET','/comments/'+v('cid')+'/replies',null,true)">ریپلای‌ها</button></div>
+</div>
+
+<div class="panel" data-p="chat">
+  <div class="row"><input id="chatWith" placeholder="username طرف مقابل"><button onclick="api('POST','/chats',{username:v('chatWith')},true)">شروع گفتگو</button>
+  <button class="gray" onclick="api('GET','/chats',null,true)">لیست گفتگوها</button></div>
+  <div class="row"><input id="convId" placeholder="conversation_id"><button onclick="api('GET','/chats/'+v('convId')+'/messages',null,true)">تاریخچه</button>
+  <button class="gray" onclick="api('POST','/chats/'+v('convId')+'/read',null,true)">خوانده شد</button></div>
+  <div class="row"><input id="msgTxt" placeholder="متن پیام (REST)"><button onclick="api('POST','/chats/'+v('convId')+'/messages',{content:v('msgTxt')},true)">ارسال REST</button>
+  <button id="wsBtn" onclick="toggleWS()">اتصال WebSocket</button></div>
+  <div class="row"><input id="wsMsg" placeholder="متن پیام (WS realtime)"><button onclick="wsSend()">ارسال WS</button>
+  <button class="gray" onclick="wsTyping()">typing…</button></div>
+  <pre id="wslog">// لاگ WebSocket</pre>
+</div>
+
+<div class="panel" data-p="wallet">
+  <div class="row"><button onclick="api('GET','/wallet',null,true)">موجودی</button>
+  <button onclick="api('GET','/wallet/transactions',null,true)">تراکنش‌ها</button>
+  <button onclick="api('POST','/wallet/daily',null,true)">🎁 پاداش روزانه</button></div>
+</div>
+
+<div class="panel" data-p="frames">
+  <div class="row"><button onclick="api('GET','/frames',null,true)">کاتالوگ فریم‌ها</button>
+  <button onclick="api('GET','/frames/inventory',null,true)">مجموعه من</button></div>
+  <div class="row"><input id="fid" placeholder="frame_id"><button onclick="api('POST','/frames/'+v('fid')+'/purchase',null,true)">خرید</button>
+  <button onclick="api('PUT','/users/me/frame',{frame_id:v('fid')||null},true)">ست کردن</button>
+  <button class="gray" onclick="api('PUT','/users/me/frame',{frame_id:null},true)">برداشتن فریم</button></div>
+  <label>قرارداد فریم (برای پنل ادمین آینده): animation_type=css|image|video|lottie — config.css + config.keyframes + config.duration</label>
+</div>
+
+<div class="panel" data-p="notif">
+  <div class="row"><button onclick="api('GET','/notifications',null,true)">لیست</button>
+  <button onclick="api('GET','/notifications/unread-count',null,true)">تعداد خوانده‌نشده</button>
+  <button onclick="api('POST','/notifications/read',null,true)">خواندن همه</button>
+  <button class="gray" onclick="api('GET','/search?q='+encodeURIComponent(prompt('جستجو:')),null,true)">جستجو</button></div>
+</div>
+
+<script>
+const API = location.origin + '/api/v1';
+let TOKEN = localStorage.getItem('vyro_at') || '';
+let REFRESH = localStorage.getItem('vyro_rt') || '';
+let WS = null;
+
+const v = id => document.getElementById(id).value.trim();
+function show(o){ document.getElementById('log').textContent = typeof o === 'string' ? o : JSON.stringify(o, null, 2); }
+function wslog(m){ const el=document.getElementById('wslog'); el.textContent = m + '\n' + el.textContent; }
+
+async function api(method, path, body, auth, isForm){
+  const headers = {};
+  if (auth && TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  let opts = { method, headers };
+  if (body !== null && body !== undefined) {
+    if (isForm) { opts.body = body; }
+    else { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  }
+  try {
+    const r = await fetch(API + path, opts);
+    const j = await r.json().catch(()=>({}));
+    show({ status: r.status, body: j });
+    if (j.access_token) { TOKEN = j.access_token; REFRESH = j.refresh_token; localStorage.setItem('vyro_at', TOKEN); localStorage.setItem('vyro_rt', REFRESH); }
+    return j;
+  } catch(e){ show('ERR: ' + e); }
+}
+async function login(){ return api('POST','/auth/login',{email:v('email'),password:v('pass')}); }
+async function reg(){
+  const r = Math.random().toString(36).slice(2,8);
+  return api('POST','/auth/register',{email:`u${r}@vyro.dev`,username:`u_${r}`,password:'Test1234'});
+}
+async function refresh(){ return api('POST','/auth/refresh',{refresh_token: REFRESH}); }
+async function createPost(){
+  const fd = new FormData();
+  fd.append('content', v('pcontent'));
+  const f = document.getElementById('pimg').files[0];
+  if (f) fd.append('files', f);
+  return api('POST','/posts', fd, true, true);
+}
+async function upload(path, inputId){
+  const fd = new FormData();
+  fd.append('file', document.getElementById(inputId).files[0]);
+  return api('PUT', path, fd, true, true);
+}
+function toggleWS(){
+  if (WS) { WS.close(); return; }
+  const wsBase = location.origin.replace('http','ws');
+  WS = new WebSocket(wsBase + '/ws/chat?token=' + TOKEN);
+  WS.onopen = () => { wslog('✅ متصل شد'); document.getElementById('wsBtn').textContent = 'قطع WebSocket'; };
+  WS.onclose = () => { wslog('❌ قطع شد'); WS = null; document.getElementById('wsBtn').textContent = 'اتصال WebSocket'; };
+  WS.onmessage = e => wslog('⬅️ ' + e.data);
+}
+function wsSend(){
+  if (!WS) return wslog('اول وصل شو');
+  WS.send(JSON.stringify({type:'message', conversation_id: v('convId'), content: v('wsMsg'), client_id: Date.now()}));
+}
+function wsTyping(){
+  if (!WS) return wslog('اول وصل شو');
+  WS.send(JSON.stringify({type:'typing', conversation_id: v('convId')}));
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelector(`.panel[data-p="${t.dataset.t}"]`).classList.add('active');
+});
+</script>
+</body>
+</html>
